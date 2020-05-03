@@ -35,15 +35,26 @@ class Network:
     """
 
     def __init__(self):
-        ### TODO: Initialize any class variables desired ###
+        self.plugin = None
+        self.net = None
 
-    def load_model(self):
-        ### TODO: Load the model ###
-        ### TODO: Check for supported layers ###
-        ### TODO: Add any necessary extensions ###
-        ### TODO: Return the loaded inference plugin ###
-        ### Note: You may need to update the function parameters. ###
-        return
+    def load_model(self, model_xml, device_name="CPU"):
+        # Loading the model
+        self.plugin = IECore()
+        model_bin = os.path.splitext(model_xml)[0] + ".bin"
+        self.net = IENetwork(model=model_xml, weights=model_bin)
+
+        # Check for supported layers and Unsupported layers
+        # If Unsupported layers found then exit the program
+        supported_layers = self.plugin.query_network(network=self.net, device_name=device_name)
+        unsupported_layers = [l for l in self.net.layers.keys() if l not in supported_layers]
+        if len(unsupported_layers) != 0:
+            print("Following layers are not supported: {}".format(unsupported_layers))
+            exit(1)
+        
+        # Load the network to IR and return 
+        ir_model = self.plugin.load_network(self.net, device_name)
+        return ir_model
 
     def get_input_shape(self):
         ### TODO: Return the shape of the input layer ###
