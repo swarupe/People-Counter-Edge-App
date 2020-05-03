@@ -39,6 +39,7 @@ class Network:
         self.net = None
         self.input_blob = None
         self.output_blob = None
+        self.infer_request_handle  = None
 
     def load_model(self, model_xml, device_name="CPU"):
         # Loading the model
@@ -70,15 +71,15 @@ class Network:
 
     def exec_net(self, ir_net, image):
         # Start an asynchronous request
-        ir_net.start_async(request_id=0, inputs={self.input_blob : image})
-        return ir_net
+        self.infer_request_handle = ir_net.start_async(request_id=0, inputs={self.input_blob : image})
+        return self.infer_request_handle
 
-    def wait(self, ir_net):
+    def wait(self):
         # Wait for the request to be complete.
         # Return any necessary information
-        status = ir_net.requests[0].wait(-1)
+        status = self.infer_request_handle.wait(-1)
         return status
 
-    def get_output(self, ir_net):
+    def get_output(self):
         # Extract and return the output results 
-        return ir_net.requests[0].outputs[self.output_blob]
+        return self.infer_request_handle.outputs[self.output_blob]
