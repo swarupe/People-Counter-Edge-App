@@ -93,13 +93,15 @@ def infer_on_stream(args, client):
     # Load the model through `infer_network`
     model = infer_network.load_model(args.model, args.device)
     input_shape = infer_network.get_input_shape()
-
     # Handle the input stream
     # Identify if image, video or camera and process accordingly
     input_type = utils.get_file_type(args.input)
 
     cap = None
     im_flag = False
+    total_count = 0
+    last_count = 0
+    start_time = 0
 
     if input_type == "IMAGE":
         im_flag = True
@@ -141,14 +143,21 @@ def infer_on_stream(args, client):
             result = infer_network.get_output()
 
             # Extract any desired stats from the results
-            out_frame, count = get_stats_draw_box(p_frame, result, width, height, args.prob_threshold)
+            out_frame, current_count = get_stats_draw_box(frame, result, width, height, args.prob_threshold)
 
             # Calculate and send relevant information on
             # current_count, total_count and duration to the MQTT server
             # Topic "person": keys of "count" and "total"
             # Topic "person/duration": key of "duration"
-            client.publish("person", json.dumps({"count": count, "total": count}))
-            client.publish("person/duration", json.dumps({"duration": 0}))
+            if current_count > last_count:
+                start_time = time.time()
+                total_count = total_count + current_count - last_count
+                client.publish("person", json.dumps({"total": total_count}))
+            if current_count < last_count:
+                duration = int(time.time() - start_time)
+                client.publish("person/duration", json.dumps({"duration": duration}))
+            client.publish("person", json.dumps({"count": current_count}))
+            last_count = current_count
         # Send the frame to the FFMPEG server
         sys.stdout.buffer.write(out_frame)
         sys.stdout.flush()
