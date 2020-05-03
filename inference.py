@@ -37,6 +37,8 @@ class Network:
     def __init__(self):
         self.plugin = None
         self.net = None
+        self.input_blob = None
+        self.output_blob = None
 
     def load_model(self, model_xml, device_name="CPU"):
         # Loading the model
@@ -54,25 +56,29 @@ class Network:
         
         # Load the network to IR and return 
         ir_model = self.plugin.load_network(self.net, device_name)
+
+        # Get input layer
+        self.input_blob = next(iter(self.net.inputs))
+        self.output_blob = next(iter(self.net.outputs))
+
+        print("IR successfully loaded into Inference Engine")
         return ir_model
 
     def get_input_shape(self):
-        ### TODO: Return the shape of the input layer ###
-        return
+        # Return the shape of the input layer
+        return self.net.inputs[self.input_blob].shape
 
-    def exec_net(self):
-        ### TODO: Start an asynchronous request ###
-        ### TODO: Return any necessary information ###
-        ### Note: You may need to update the function parameters. ###
-        return
+    def exec_net(self, ir_net, image):
+        # Start an asynchronous request
+        ir_net.start_async(request_id=0, inputs={self.input_blob : image})
+        return ir_net
 
-    def wait(self):
-        ### TODO: Wait for the request to be complete. ###
-        ### TODO: Return any necessary information ###
-        ### Note: You may need to update the function parameters. ###
-        return
+    def wait(self, ir_net):
+        # Wait for the request to be complete.
+        # Return any necessary information
+        status = ir_net.requests[0].wait(-1)
+        return status
 
-    def get_output(self):
-        ### TODO: Extract and return the output results
-        ### Note: You may need to update the function parameters. ###
-        return
+    def get_output(self, ir_net):
+        # Extract and return the output results 
+        return ir_net.requests[0].outputs[self.output_blob]
