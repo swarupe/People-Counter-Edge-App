@@ -32,6 +32,7 @@ import paho.mqtt.client as mqtt
 
 from argparse import ArgumentParser
 from inference import Network
+import utils
 
 # MQTT server environment variables
 HOSTNAME = socket.gethostname()
@@ -89,33 +90,89 @@ def infer_on_stream(args, client):
     # Set Probability threshold for detections
     prob_threshold = args.prob_threshold
 
-    ### TODO: Load the model through `infer_network` ###
+    # Load the model through `infer_network`
+    model = infer_network.load_model(args.model, args.device)
+    input_shape = infer_network.get_input_shape()
 
-    ### TODO: Handle the input stream ###
+    # Handle the input stream
+    # Identify if image, video or camera and process accordingly
+    input_type = utils.get_file_type(args.input)
 
-    ### TODO: Loop until stream is over ###
+    cap = None
+    im_flag = False
 
-        ### TODO: Read from the video capture ###
+    if input_type == "IMAGE":
+        im_flag = True
+    elif input_type == "VIDEO":
+        cap = cv2.VideoCapture(args.input)
+    elif input_type == "CAM":
+        cap = cv2.VideoCapture(0)
+    else:
+        print("Unrecognized image or video file format. Please provide proper path or 'CAM' for camera input")
+        sys.exit(1)
+    
+    cap.open(args.input)
 
-        ### TODO: Pre-process the image as needed ###
+    # Loop until stream is over
+    while cap.isOpened():
+        # Read from the video capture
+        flag, frame = cap.read()
 
-        ### TODO: Start asynchronous inference for specified request ###
+        if not flag:
+            break
+        key_pressed = cv2.waitKey(60)
+        if key_pressed == 27:
+            break
 
-        ### TODO: Wait for the result ###
+        width = int(cap.get(3))
+        height = int(cap.get(4))
 
-            ### TODO: Get the results of the inference request ###
+        # Pre-process the image as needed
+        p_frame = cv2.resize(frame, (input_shape[3], input_shape[2]))
+        p_frame = p_frame.transpose((2,0,1))
+        p_frame = p_frame.reshape(1, *p_frame.shape)
 
-            ### TODO: Extract any desired stats from the results ###
+        # Start asynchronous inference for specified request
+        infer_network.exec_net(model, p_frame)
 
-            ### TODO: Calculate and send relevant information on ###
-            ### current_count, total_count and duration to the MQTT server ###
-            ### Topic "person": keys of "count" and "total" ###
-            ### Topic "person/duration": key of "duration" ###
+        # Wait for the result
+        if infer_network.wait() == 0:
+            # Get the results of the inference request
+            result = infer_network.get_output()
 
-        ### TODO: Send the frame to the FFMPEG server ###
+            # Extract any desired stats from the results
+            out_frame, count = get_stats_draw_box(p_frame, result, width, height, args.prob_threshold)
 
-        ### TODO: Write an output image if `single_image_mode` ###
+            # Calculate and send relevant information on
+            # current_count, total_count and duration to the MQTT server
+            # Topic "person": keys of "count" and "total"
+            # Topic "person/duration": key of "duration"
+            client.publish("person", json.dumps({"count": count, "total": count}))
+            client.publish("person/duration", json.dumps({"duration": 0}))
+        # Send the frame to the FFMPEG server
+        sys.stdout.buffer.write(out_frame)
+        sys.stdout.flush()
+        
+        # Write an output image if `single_image_mode`
+        if im_flag:
+            cv2.imwrite("test_out.jpg", out_frame)
+    cap.release()
+    cv2.destroyAllWindows()
+    client.disconnect()
 
+def get_stats_draw_box(image, result, width, height, threshold):
+    count = 0
+    for box in result[0][0]:
+        confidence = box[2]
+        if confidence >= threshold:
+            count += 1
+            xmin = int(box[3] * width)
+            ymin = int(box[4] * height)
+            xmax = int(box[5] * width)
+            ymax = int(box[6] * height)
+            cv2.rectangle(image, (xmin, ymin), (xmax, ymax), (255, 0, 255), 1)
+            
+    return image, count
 
 def main():
     """
