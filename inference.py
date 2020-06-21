@@ -41,7 +41,7 @@ class Network:
         self.output_blob = None
         self.infer_request_handle  = None
 
-    def load_model(self, model_xml, device_name="CPU"):
+    def load_model(self, model_xml, cpu_extension, device_name="CPU"):
         # Loading the model
         self.plugin = IECore()
         model_bin = os.path.splitext(model_xml)[0] + ".bin"
@@ -52,8 +52,16 @@ class Network:
         supported_layers = self.plugin.query_network(network=self.net, device_name=device_name)
         unsupported_layers = [l for l in self.net.layers.keys() if l not in supported_layers]
         if len(unsupported_layers) != 0:
-            print("Following layers are not supported: {}".format(unsupported_layers))
-            exit(1)
+            if cpu_extension:
+                self.plugin.add_extension(cpu_extension, device_name)
+                supported_layers = self.plugin.query_network(network=self.net, device_name=device_name)
+                unsupported_layers = [l for l in self.net.layers.keys() if l not in supported_layers]
+                if len(unsupported_layers) != 0:
+                    print("Following layers are not supported: {}".format(unsupported_layers))
+                    exit(1)
+            else:
+                print("Following layers are not supported: {}".format(unsupported_layers))
+                exit(1)
         
         # Load the network to IR and return 
         ir_model = self.plugin.load_network(self.net, device_name)

@@ -91,7 +91,7 @@ def infer_on_stream(args, client):
     prob_threshold = args.prob_threshold
 
     # Load the model through `infer_network`
-    model = infer_network.load_model(args.model, args.device)
+    model = infer_network.load_model(args.model, args.cpu_extension, args.device)
     input_shape = infer_network.get_input_shape()
     # Handle the input stream
     # Identify if image, video or camera and process accordingly
